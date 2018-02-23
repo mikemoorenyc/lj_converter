@@ -1,38 +1,75 @@
 <?php
+/**
+ * Template Name: NEW Media Stream
+ */
 date_default_timezone_set('America/New_York');
-$posts = new SimpleXMLElement(file_get_contents('allPosts.xml'));
-$utc_time = new DateTimeZone('UTC');
-$itemArray = [];
 
-foreach($posts->post as $p) {
- $itemString = '<item>';
- $title = strip_tags(htmlspecialchars_decode($p->title)) ;
- $itemString .= '<title>'.$title.'</title>';
+
+function createNew($files) {
+ if(empty($files)) {
+  return false;
+ }
+ $posts = new SimpleXMLElement(file_get_contents('post_file'));
+ if(!$posts){return false;}
+ 
+ $utc_time = new DateTimeZone('UTC'); 
+ $postCount = count($posts->post);
+ $successPosts = 0;
+ foreach($posts->post as $p) {
+  $title = strip_tags(htmlspecialchars_decode($p->title[0]));
   $tagArray = [];
-  foreach($p->tags->tag as $t) {
-   $tagArray[] ='<category domain="post_tag" nicename="'.$t.'"><![CDATA['.$t.']]></category>'; 
+  foreach($p->tags[0]->tag as $t) {
+   $tagArray[] = $t;
   }
- $itemString .= implode('',$tagArray);
   foreach($p->attributes() as $k => $a) {
    if($k !== 'date') {
      continue;
    }
    $ny_time = new DateTime($a);
    $ny_time->setTimezone($utc_time);
-   $pubDate = $datetime->format('D, d M Y H:i:s').' +0000';
-   exit;
+   $pubDate = $datetime->format('Y-m-d H:i:s').' +0000';
+   break;
   }
- $itemString .= '<pubDate>'.$pubDate.'</pubDate>';
- $itemString .= '<content:encoded><![CDATA['.htmlspecialchars_decode($p->body).']]></content:encoded>';
- $itemString .= '</item>';
- $itemArray[] = $itemString;
-  
+  if(!$pubDate){break;}
+  $content = htmlspecialchars_decode($p->body[0]);
+ 
+  $pid = wp_insert_post(array(
+   'post_title'    =>   $title,
+   'post_content'  =>   $content,
+   'post_date'     =>   $pubDate,
+   'post_status'   =>   'publish',
+  ));
+  if($pid) {
+   $successPosts++;
+   wp_set_post_tags($pid,$tagArray);
+  }
+ }
+ if($successPosts === $postCount) {
+  return true;
+ }
+ 
 }
 
-echo '<?xml version="1.0" encoding="UTF-8" ?><rss version="2.0" xmlns:excerpt="http://wordpress.org/export/1.2/excerpt/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:wfw="http://wellformedweb.org/CommentAPI/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:wp="http://wordpress.org/export/1.2/" ><channel>'.implode('',$itemArray).'</channel></rss>';
-die();
-                              
 
+
+$successFile = createNew($_FILES);
+
+?>
+<?php if(!$successFile): ?>
+<form enctype="multipart/form-data" action="__URL__" method="POST">
+    <!-- MAX_FILE_SIZE must precede the file input field -->
+    <input type="hidden" name="MAX_FILE_SIZE" value="30000" />
+    <!-- Name of input element determines name in $_FILES array -->
+    Send this file: <input name="userfile" type="file" />
+    <input type="submit" value="Send File" />
+</form>                 
+<?php endif;?>
+
+<?php if($successFile):?>
+
+<h1>Posts uploaded</h1>
+
+<?php endif;?>
 
 
 ?>
